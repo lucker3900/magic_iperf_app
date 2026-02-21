@@ -1,10 +1,12 @@
 package com.luckerlucky.magiciperf
 
 import android.content.Context
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
 import timber.log.Timber
 import java.io.BufferedReader
 import java.io.File
@@ -12,6 +14,7 @@ import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 
 enum class Protocol { TCP, UDP }
+enum class IperfVersion { IPERF3, IPERF2 }
 
 data class IperfParams(
     val serverHost: String,
@@ -30,41 +33,35 @@ data class IperfResult(
 class MissingBinaryException(message: String) : Exception(message)
 
 class IperfRunner(
-    private val context: Context,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val context: Context
 ) {
 
-    private val binaryName = "iperf3"
-    private val binaryFile: File
-        get() = File(context.filesDir, binaryName)
-
-    /**
-     * Ensure iperf3 binary is available and executable.
-     * If assets do not contain the binary, propagate a typed error for UI hinting.
-     */
-    private suspend fun ensureBinaryReady(): Result<Unit> = withContext(dispatcher) {
-        if (binaryFile.exists() && binaryFile.canExecute()) {
-            return@withContext Result.success(Unit)
-        }
-
-        return@withContext runCatching {
-            context.assets.open(binaryName).use { input ->
-                binaryFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            binaryFile.setExecutable(true)
-            binaryFile.setReadable(true, false)
-        }.recoverCatching { throwable ->
-            throw MissingBinaryException("未找到 iperf3 可执行文件，请先放入 assets/iperf3 并重新安装应用。原始错误: ${throwable.message}")
-        }
+    private fun nativeLibNameFor(version: IperfVersion): String = when (version) {
+        IperfVersion.IPERF3 -> "libiperf3.so"
+        IperfVersion.IPERF2 -> "libiperf2.so"
     }
 
-    suspend fun runTest(params: IperfParams): Result<IperfResult> = withContext(dispatcher) {
-        ensureBinaryReady().getOrElse { return@withContext Result.failure(it) }
+    private fun labelFor(version: IperfVersion): String = when (version) {
+        IperfVersion.IPERF3 -> "iperf3"
+        IperfVersion.IPERF2 -> "iperf2"
+    }
 
+    private fun findBinary(version: IperfVersion): File {
+        val nativeLibDir = File(context.applicationInfo.nativeLibraryDir)
+        val binary = File(nativeLibDir, nativeLibNameFor(version))
+        if (!binary.exists() || !binary.canExecute()) {
+            val label = labelFor(version)
+            throw MissingBinaryException(
+                "缺少 $label 可执行文件\n请将针对设备架构编译的 $label 放到 jniLibs/arm64-v8a/${nativeLibNameFor(version)}，重新安装后再试。"
+            )
+        }
+        return binary
+    }
+
+    fun runTestStream(params: IperfParams, version: IperfVersion = IperfVersion.IPERF3): Flow<String> {
+        val binary = findBinary(version)
         val command = buildList {
-            add(binaryFile.absolutePath)
+            add(binary.absolutePath)
             add("-c")
             add(params.serverHost)
             add("-p")
@@ -80,42 +77,50 @@ class IperfRunner(
                 }
             }
         }
+        val label = labelFor(version)
+        Timber.d("Running $label with command: ${command.joinToString(" ")}")
+        return executeCommandStream(command, label)
+    }
 
-        Timber.d("Running iperf3 with command: ${command.joinToString(" ")}")
+    fun runCustomCommandStream(rawArgs: String, version: IperfVersion): Flow<String> {
+        val binary = findBinary(version)
+        val command = buildList {
+            add(binary.absolutePath)
+            addAll(rawArgs.trim().split("\\s+".toRegex()))
+        }
+        val label = labelFor(version)
+        Timber.d("Running $label custom command: ${command.joinToString(" ")}")
+        return executeCommandStream(command, label)
+    }
 
-        return@withContext runCatching {
-            val process = ProcessBuilder(command)
-                .redirectErrorStream(true)
-                .start()
+    private fun executeCommandStream(command: List<String>, label: String): Flow<String> = flow {
+        val process = ProcessBuilder(command)
+            .redirectErrorStream(true)
+            .start()
 
-            // Read output while process runs to avoid buffer fill-up
-            val outputBuilder = StringBuilder()
+        try {
             val reader = BufferedReader(InputStreamReader(process.inputStream))
-            reader.useLines { lines ->
-                lines.forEach { line ->
-                    outputBuilder.appendLine(line)
-                    if (!isActive) {
-                        process.destroy()
-                        return@forEach
-                    }
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                emit(line!!)
+                if (!currentCoroutineContext().isActive) {
+                    process.destroy()
+                    break
                 }
             }
 
             if (!process.waitFor(90, TimeUnit.SECONDS)) {
                 process.destroy()
-                throw IllegalStateException("iperf3 执行超时")
+                throw IllegalStateException("$label 执行超时")
             }
 
             val exitCode = process.exitValue()
-            val finalOutput = outputBuilder.toString()
-
-            if (exitCode != 0) {
-                throw IllegalStateException("iperf3 退出码 $exitCode: $finalOutput")
+            if (exitCode != 0 && currentCoroutineContext().isActive) {
+                // Don't throw for non-zero exit if we already emitted output
             }
-
-            IperfResult(
-                rawOutput = finalOutput.trim().ifEmpty { "iperf3 没有返回输出" }
-            )
+        } catch (e: Exception) {
+            process.destroy()
+            throw e
         }
-    }
+    }.flowOn(Dispatchers.IO)
 }
