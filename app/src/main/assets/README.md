@@ -1,5 +1,7 @@
-Place the platform-matching `iperf3` binary in this folder.
+Place the platform-matching binaries in this folder.
 
 Notes:
-- File name must be exactly `iperf3` (no extension), and marked executable after install.
-- Avoid committing the binary to git to keep the repository small.
+- For iperf3, file name must be exactly `iperf3` (no extension).
+- For iperf2, file name must be exactly `iperf2` (no extension).
+- The app will copy the selected binary to internal storage and mark it executable.
+- Avoid committing binaries to git to keep the repository small.

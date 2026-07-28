@@ -4,10 +4,13 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,42 +24,45 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.luckerlucky.magiciperf.BuildConfig
-import com.luckerlucky.magiciperf.ui.theme.MagicIperfTheme
 import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
     private val runner by lazy { IperfRunner(applicationContext) }
     private val viewModel: MagicIperfViewModel by viewModels {
-        MagicIperfViewModel.Factory(runner)
+        MagicIperfViewModel.Factory(applicationContext, runner)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,58 +71,27 @@ class MainActivity : ComponentActivity() {
             Timber.plant(Timber.DebugTree())
         }
         setContent {
-            MagicIperfTheme {
+            com.luckerlucky.magiciperf.ui.theme.MagicIperfTheme {
                 val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-                MagicIperfApp(
-                    state = uiState,
-                    onHostChange = viewModel::updateHost,
-                    onPortChange = viewModel::updatePort,
-                    onDurationChange = viewModel::updateDuration,
-                    onBandwidthChange = viewModel::updateBandwidth,
-                    onProtocolChange = viewModel::updateProtocol,
-                    onReverseToggle = viewModel::toggleReverse,
-                    onStart = viewModel::runTest,
-                    onStop = viewModel::stopTest,
-                    onClearOutput = viewModel::clearOutput,
-                    onDismissError = viewModel::clearError,
-                    onIperfVersionChange = viewModel::updateIperfVersion,
-                    onCustomArgsChange = viewModel::updateCustomArgs,
-                    onToggleCustomArgs = viewModel::toggleCustomArgs
-                )
+                MagicIperfApp(state = uiState, viewModel = viewModel)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.refreshNetworkInfo()
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MagicIperfApp(
-    state: UiState,
-    onHostChange: (String) -> Unit,
-    onPortChange: (String) -> Unit,
-    onDurationChange: (String) -> Unit,
-    onBandwidthChange: (String) -> Unit,
-    onProtocolChange: (Protocol) -> Unit,
-    onReverseToggle: (Boolean) -> Unit,
-    onStart: () -> Unit,
-    onStop: () -> Unit,
-    onClearOutput: () -> Unit,
-    onDismissError: () -> Unit,
-    onIperfVersionChange: (IperfVersion) -> Unit,
-    onCustomArgsChange: (String) -> Unit,
-    onToggleCustomArgs: (Boolean) -> Unit
-) {
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    LaunchedEffect(state.error) {
-        state.error?.let { snackbarHostState.showSnackbar(it) }
-    }
-
+fun MagicIperfApp(state: UiState, viewModel: MagicIperfViewModel) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Magic iPerf", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                title = { Text(stringResource(R.string.app_name), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
                     Icon(
                         imageVector = Icons.Outlined.Info,
@@ -126,50 +101,30 @@ fun MagicIperfApp(
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors()
             )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        }
     ) { paddingValues ->
-        Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            MagicIperfContent(
-                state = state,
-                onHostChange = onHostChange,
-                onPortChange = onPortChange,
-                onDurationChange = onDurationChange,
-                onBandwidthChange = onBandwidthChange,
-                onProtocolChange = onProtocolChange,
-                onReverseToggle = onReverseToggle,
-                onStart = onStart,
-                onStop = onStop,
-                onClearOutput = onClearOutput,
-                onIperfVersionChange = onIperfVersionChange,
-                onCustomArgsChange = onCustomArgsChange,
-                onToggleCustomArgs = onToggleCustomArgs
+        Surface(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            MagicIperfContent(state = state, viewModel = viewModel)
+        }
+        state.error?.let { message ->
+            AlertDialog(
+                onDismissRequest = viewModel::clearError,
+                text = { Text(message) },
+                confirmButton = {
+                    TextButton(onClick = viewModel::clearError) {
+                        Text(stringResource(android.R.string.ok))
+                    }
+                }
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MagicIperfContent(
-    state: UiState,
-    onHostChange: (String) -> Unit,
-    onPortChange: (String) -> Unit,
-    onDurationChange: (String) -> Unit,
-    onBandwidthChange: (String) -> Unit,
-    onProtocolChange: (Protocol) -> Unit,
-    onReverseToggle: (Boolean) -> Unit,
-    onStart: () -> Unit,
-    onStop: () -> Unit,
-    onClearOutput: () -> Unit,
-    onIperfVersionChange: (IperfVersion) -> Unit,
-    onCustomArgsChange: (String) -> Unit,
-    onToggleCustomArgs: (Boolean) -> Unit
-) {
+private fun MagicIperfContent(state: UiState, viewModel: MagicIperfViewModel) {
     val scrollState = rememberScrollState()
+    var commandFieldFocused by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -178,231 +133,266 @@ private fun MagicIperfContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // iperf version selector
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            VersionChip(
-                selected = state.iperfVersion == IperfVersion.IPERF3,
-                label = "iperf3",
-                onClick = { onIperfVersionChange(IperfVersion.IPERF3) }
-            )
-            VersionChip(
-                selected = state.iperfVersion == IperfVersion.IPERF2,
-                label = "iperf2",
-                onClick = { onIperfVersionChange(IperfVersion.IPERF2) }
-            )
-        }
+        Text(text = stringResource(R.string.app_tagline), style = MaterialTheme.typography.bodyMedium)
 
-        // Custom args input
-        OutlinedTextField(
-            value = state.customArgs,
-            onValueChange = onCustomArgsChange,
-            label = { Text("自定义参数（可选）") },
-            placeholder = { Text("-c 10.0.0.5 -t 30 -i 1 -b 10M") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = false,
-            maxLines = 2,
-            enabled = !state.isRunning
-        )
-
-        if (state.customArgs.isNotBlank()) {
+        // Own-address header (tap to refresh) — mirrors the iOS header rows.
+        Column(modifier = Modifier.clickable { viewModel.refreshNetworkInfo() }) {
             Text(
-                text = "已启用自定义参数，除 iperf 版本外其余选项已禁用。",
-                style = MaterialTheme.typography.bodySmall
+                text = state.wifiIP?.let { stringResource(R.string.wifi_ip, it) }
+                    ?: stringResource(R.string.not_connected_wifi),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (state.wifiIP != null) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.secondary
+            )
+            state.hotspotIP?.let {
+                Text(
+                    text = stringResource(R.string.hotspot_ip, it),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        // Input-method tabs: custom command on the left and default.
+        TabRow(selectedTabIndex = if (state.customMode) 0 else 1) {
+            Tab(
+                selected = state.customMode,
+                onClick = { if (!state.isRunning) viewModel.updateInputMode(InputMode.CUSTOM) },
+                text = { Text(stringResource(R.string.tab_custom)) }
+            )
+            Tab(
+                selected = !state.customMode,
+                onClick = { if (!state.isRunning) viewModel.updateInputMode(InputMode.PARAMS) },
+                text = { Text(stringResource(R.string.tab_params)) }
             )
         }
 
-        // Standard options (disabled when custom args are used)
-        val standardEnabled = !state.isRunning && state.customArgs.isBlank()
-
-        OutlinedTextField(
-            value = state.host,
-            onValueChange = onHostChange,
-            label = { Text("服务器地址") },
-            placeholder = { Text("例如：iperf.example.com") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            enabled = standardEnabled
-        )
-
+        // Engine — applies to both modes.
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedTextField(
-                value = state.port,
-                onValueChange = onPortChange,
-                label = { Text("端口") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                enabled = standardEnabled
+            FilterChip(
+                selected = state.iperfVersion == IperfVersion.V3,
+                enabled = !state.isRunning,
+                onClick = { viewModel.updateIperfVersion(IperfVersion.V3) },
+                label = { Text("iperf3") }
             )
-            OutlinedTextField(
-                value = state.durationSeconds,
-                onValueChange = onDurationChange,
-                label = { Text("持续时间 (s)") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                enabled = standardEnabled
+            FilterChip(
+                selected = state.iperfVersion == IperfVersion.V2,
+                enabled = !state.isRunning,
+                onClick = { viewModel.updateIperfVersion(IperfVersion.V2) },
+                label = { Text("iperf2") }
             )
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            ProtocolChip(
-                selected = state.protocol == Protocol.TCP,
-                label = "TCP",
-                onClick = { onProtocolChange(Protocol.TCP) },
-                enabled = standardEnabled
+        if (state.customMode) {
+            OutlinedTextField(
+                value = state.customArgs,
+                onValueChange = viewModel::updateCustomArgs,
+                label = { Text(stringResource(R.string.tab_custom)) },
+                placeholder = { Text(stringResource(R.string.custom_command_placeholder)) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { commandFieldFocused = it.isFocused },
+                singleLine = true,
+                enabled = !state.isRunning
             )
-            ProtocolChip(
-                selected = state.protocol == Protocol.UDP,
-                label = "UDP",
-                onClick = { onProtocolChange(Protocol.UDP) },
-                enabled = standardEnabled
+            if (commandFieldFocused && state.commandHistory.isNotEmpty()) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(
+                            text = stringResource(R.string.recent_commands),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        state.commandHistory.forEach { command ->
+                            Text(
+                                text = command,
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .combinedClickable(
+                                        onClick = { viewModel.fillFromHistory(command) },
+                                        onLongClick = { viewModel.deleteHistory(command) }
+                                    )
+                                    .padding(vertical = 8.dp)
+                            )
+                            if (command != state.commandHistory.last()) HorizontalDivider()
+                        }
+                    }
+                }
+            }
+            Text(
+                text = stringResource(R.string.custom_command_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary
             )
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                IperfRole.entries.forEach { role ->
+                    FilterChip(
+                        selected = state.role == role,
+                        enabled = !state.isRunning,
+                        onClick = { viewModel.updateRole(role) },
+                        label = { Text(role.label) }
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = state.host,
+                onValueChange = viewModel::updateHost,
+                label = { Text(stringResource(R.string.server_address)) },
+                placeholder = { Text(stringResource(R.string.server_address_placeholder)) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                enabled = !state.isRunning && !state.serverMode
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = state.port,
+                    onValueChange = viewModel::updatePort,
+                    label = { Text(stringResource(R.string.port_label)) },
+                    placeholder = { Text(state.defaultPort.toString()) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    enabled = !state.isRunning
+                )
+                OutlinedTextField(
+                    value = state.durationSeconds,
+                    onValueChange = viewModel::updateDuration,
+                    label = { Text(stringResource(R.string.duration_label)) },
+                    placeholder = { Text(MagicIperfViewModel.DEFAULT_DURATION_SECONDS.toString()) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    enabled = !state.isRunning && !state.serverMode
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Protocol.entries.forEach { protocol ->
+                    FilterChip(
+                        selected = state.protocol == protocol,
+                        enabled = !state.isRunning,
+                        onClick = { viewModel.updateProtocol(protocol) },
+                        label = { Text(protocol.name) }
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = state.bandwidthMbps,
+                onValueChange = viewModel::updateBandwidth,
+                label = { Text(stringResource(R.string.bandwidth_label)) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                enabled = !state.isRunning && !state.serverMode && state.protocol == Protocol.UDP
+            )
+
+            if (!state.serverMode) {
+                FilterChip(
+                    selected = state.reverse,
+                    enabled = !state.isRunning,
+                    onClick = viewModel::toggleReverse,
+                    label = { Text(stringResource(R.string.reverse_label)) }
+                )
+            }
         }
 
-        OutlinedTextField(
-            value = state.bandwidthMbps,
-            onValueChange = onBandwidthChange,
-            label = { Text("带宽 (Mbps，UDP 可选)") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            enabled = standardEnabled
-        )
-
+        // Action row: clear + start / red stop.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AssistChip(
-                label = {
-                    Text(if (state.reverse) "反向测试 (服务器下行)" else "正向测试 (服务器上行)")
-                },
-                onClick = { onReverseToggle(!state.reverse) },
-                enabled = standardEnabled
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextButton(onClick = onClearOutput, enabled = !state.isRunning) {
-                    Icon(Icons.Default.Refresh, contentDescription = null)
+            TextButton(onClick = viewModel::clearOutput, enabled = !state.isRunning) {
+                Icon(Icons.Default.Refresh, contentDescription = null)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(stringResource(R.string.clear))
+            }
+            if (state.isRunning) {
+                Button(
+                    onClick = viewModel::stopTest,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(Icons.Filled.Stop, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("清空")
+                    Text(stringResource(R.string.stop))
                 }
-                if (state.isRunning) {
-                    Button(
-                        onClick = onStop,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Icon(Icons.Filled.Stop, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("停止")
-                    }
-                } else {
-                    Button(onClick = onStart) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("开始测试")
-                    }
+            } else {
+                Button(onClick = viewModel::runTest) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(stringResource(R.string.start_test))
                 }
             }
         }
 
         if (state.showMissingBinaryHint) {
-            val versionLabel = if (state.iperfVersion == IperfVersion.IPERF2) "iperf2" else "iperf3"
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium
-            ) {
+            Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "缺少 $versionLabel 可执行文件",
+                        text = stringResource(R.string.missing_binary_title, state.iperfVersion.displayName),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "请将针对设备架构编译的 $versionLabel 放到 jniLibs/arm64-v8a/lib${versionLabel}.so，重新安装后再试。",
+                        text = stringResource(
+                            R.string.missing_binary_body,
+                            state.iperfVersion.displayName, state.iperfVersion.binaryName
+                        ),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
         }
 
-        // Output log card with auto-scroll
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(260.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(12.dp)
-                    .fillMaxSize()
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "输出日志",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    state.lastSuccessTimestamp?.let {
-                        Text(
-                            text = "上次成功: ${android.text.format.DateFormat.format("MM-dd HH:mm", it)}",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-
-                val logScrollState = rememberScrollState()
-
-                // Auto-scroll to bottom when output changes
-                LaunchedEffect(state.output) {
-                    logScrollState.animateScrollTo(logScrollState.maxValue)
-                }
-
-                Text(
-                    text = state.output.ifBlank { "等待执行..." },
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(logScrollState),
-                    textAlign = TextAlign.Start
-                )
-            }
-        }
+        OutputCard(state)
     }
 }
 
 @Composable
-private fun RowScope.VersionChip(
-    selected: Boolean,
-    label: String,
-    onClick: () -> Unit
-) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label) },
-        modifier = Modifier.weight(1f)
-    )
-}
+private fun OutputCard(state: UiState) {
+    val outputScroll = rememberScrollState()
+    LaunchedEffect(state.output) {
+        outputScroll.scrollTo(outputScroll.maxValue)
+    }
 
-@Composable
-private fun RowScope.ProtocolChip(
-    selected: Boolean,
-    label: String,
-    onClick: () -> Unit,
-    enabled: Boolean = true
-) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label) },
-        modifier = Modifier.weight(1f),
-        enabled = enabled
-    )
+    Card(modifier = Modifier.fillMaxWidth().height(300.dp)) {
+        Column(modifier = Modifier.padding(12.dp).fillMaxSize()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.output_log),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                state.lastSuccessTimestamp?.let {
+                    Text(
+                        text = stringResource(
+                            R.string.last_success,
+                            android.text.format.DateFormat.format("MM-dd HH:mm", it).toString()
+                        ),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = state.output.ifBlank {
+                    stringResource(R.string.waiting_to_run, state.iperfVersion.displayName)
+                },
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                softWrap = false,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(outputScroll)
+                    .horizontalScroll(rememberScrollState())
+            )
+        }
+    }
 }

@@ -3,9 +3,18 @@
 build/
 /local.properties
 
-# IDE
+# IDE / editor
 .idea/
+.vscode/
+.continue/
 *.iml
+
+# Local gradle home & OS noise
+.gradle_home/
+.DS_Store
+
+# Unrelated local scratch
+sql/
 
 # Android outputs
 */build/

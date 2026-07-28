@@ -1,4 +1,90 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Base language = English: any system language without a translation falls
+     back here, matching the iOS app's String Catalog (sourceLanguage en). -->
 <resources>
-    <string name="app_name">MagicIperf</string>
+    <string name="app_name">Magic iPerf</string>
+    <string name="app_tagline">A lightweight iperf2/iperf3 client for quick TCP/UDP throughput checks.</string>
+
+    <!-- Header -->
+    <string name="wifi_ip">Wi-Fi IP: %1$s</string>
+    <string name="hotspot_ip">Hotspot IP: %1$s</string>
+    <string name="not_connected_wifi">Not connected to Wi-Fi</string>
+
+    <!-- Tabs & fields -->
+    <string name="tab_custom">Custom command</string>
+    <string name="tab_params">Parameter setup</string>
+    <string name="custom_command_placeholder">e.g. -c 192.168.1.100 -p 5201 -i 1 -t 10</string>
+    <string name="custom_command_hint">Write every argument in the command itself (-c host, -p port, -t duration, …).</string>
+    <string name="recent_commands">Recent commands</string>
+    <string name="delete">Delete</string>
+    <string name="server_address">Server address</string>
+    <string name="server_address_placeholder">e.g. 192.168.1.100</string>
+    <string name="port_label">Port</string>
+    <string name="duration_label">Duration (s)</string>
+    <string name="bandwidth_label">Bandwidth (Mbps, UDP only)</string>
+    <string name="reverse_label">Reverse -R</string>
+    <string name="clear">Clear</string>
+    <string name="start_test">Start test</string>
+    <string name="stop">Stop</string>
+    <string name="output_log">Output log</string>
+    <string name="last_success">Last success: %1$s</string>
+    <string name="waiting_to_run">Waiting to run %1$s…</string>
+
+    <!-- Validation -->
+    <string name="err_enter_custom">Please enter a custom command</string>
+    <string name="err_bad_custom">Invalid custom command (check that quotes are balanced)</string>
+    <string name="err_enter_host">Please enter the server address</string>
+    <string name="err_port_range">Port must be between 1 and 65535</string>
+    <string name="err_duration_range">Duration must be between 1 and 86400 seconds</string>
+    <string name="err_bandwidth_range">Bandwidth must be between 1 and 100000 Mbps</string>
+
+    <!-- Run lifecycle -->
+    <string name="testing">Testing %1$s…</string>
+    <string name="stopping">[Stopping…]</string>
+    <string name="stopped">[Stopped]</string>
+    <string name="test_failed">Test failed</string>
+
+    <!-- Pre-run hints -->
+    <string name="port_default_warning">⚠️ Port %1$s is the default port of %2$s, but the current engine is %3$s — make sure both ends match on engine/port/protocol (peer: `iperf3 -s`↔iperf3, `iperf -s`↔iperf2).</string>
+    <string name="self_target_localhost">Server address %1$s points at this device itself — this app cannot be its own server here; enter the peer device\'s IP.</string>
+    <string name="self_target_own">Server address %1$s is this phone\'s own address (see the IP shown at the top). A client must target the peer machine running the server.</string>
+    <string name="port_switched_note">[Port %1$s is in use — this run uses port %2$s instead. Point the peer client at -p %2$s.]</string>
+    <string name="port_in_use_custom">Port %1$s is already in use — add -p %2$s to your command to use a free port.</string>
+    <string name="port_in_use_fallback">Port %1$s is already in use by another program on this phone — stop it or use a different port.</string>
+    <string name="peer_command_note">[Peer command: %1$s]</string>
+
+    <!-- Missing binary -->
+    <string name="missing_binary_title">Missing %1$s executable</string>
+    <string name="missing_binary_body">Put a %1$s binary built for this device\'s architecture at assets/%2$s and reinstall.</string>
+    <string name="missing_binary_error">%1$s executable not found — add assets/%2$s and reinstall. Original error: %3$s</string>
+
+    <!-- Runner errors -->
+    <string name="exec_timeout">%1$s timed out</string>
+    <string name="exit_code_prefix">%1$s exit code %2$s</string>
+    <string name="no_output">%1$s produced no output</string>
+
+    <!-- Failure markers (exit 0 can still be a failure) -->
+    <string name="marker_refused">Connection refused (nothing is listening on that port).</string>
+    <string name="marker_mismatch">The peer did not speak iperf3\'s protocol — the server may be running iperf2 (`iperf -s`) or something else; use the same iperf generation on both ends</string>
+    <string name="marker_timeout">Connection timed out (check the address / port / network reachability)</string>
+    <string name="marker_no_route">No route to host (possibly a different network)</string>
+    <string name="marker_net_unreachable">Network is unreachable</string>
+    <string name="marker_host_unreachable">Host is unreachable</string>
+    <string name="marker_resolve">Could not resolve the server address</string>
+    <string name="marker_busy">The server is busy (another test is running)</string>
+    <string name="marker_unable_connect">Could not connect to the server</string>
+    <string name="marker_unable_receive">Communication with the server failed (engine or port mismatch?)</string>
+    <string name="marker_ctrl_closed">The connection to the server closed unexpectedly</string>
+    <string name="marker_broken_pipe">Connection broken (broken pipe)</string>
+    <string name="marker_write_failed">Connection broken: write failed (engine mismatch with the server?)</string>
+    <string name="marker_read_failed">Connection broken: read failed</string>
+    <string name="marker_shutdown_failed">Connection closed abnormally</string>
+    <string name="marker_iperf3_error">iperf3 reported an error (see the log)</string>
+    <string name="marker_generic_failed">Test failed (see the log)</string>
+
+    <!-- Alignment hints -->
+    <string name="alignment_checklist">Hint: make sure both ends match on ① engine (peer: `iperf3 -s`↔iperf3, `iperf -s`↔iperf2) ② port (iperf3 defaults to 5201, iperf2 to 5001) ③ TCP/UDP (an iperf2 server needs `-u` to accept UDP)</string>
+    <string name="hint_client_only">Hint: iperf3\'s -u (UDP), -b, … are client-only options — an iperf3 server takes just `-s` and the connecting client decides TCP/UDP; to keep iperf2\'s `-u -s` habit switch the engine to iperf2</string>
+    <string name="hint_server_only">Hint: that option is iperf3-server-only — remove it from the client command</string>
+    <string name="hint_wrong_generation">Hint: the peer did not answer this engine\'s protocol — it may be running the other iperf generation; use the same one on both ends (peer: `iperf3 -s`↔iperf3, `iperf -s`↔iperf2)</string>
 </resources>
